@@ -6,4 +6,5 @@ export * from "./core/service.js";
 export * from "./core/pageindex.js";
 export * from "./core/pi-inference.js";
 export * from "./core/rerank.js";
-export * from "./adapters/typesense.js";
+export * from "./core/provider.js";
+export * from "./adapters/index.js";

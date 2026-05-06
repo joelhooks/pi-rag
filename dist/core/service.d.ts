@@ -1,17 +1,12 @@
-import { TypesenseSessionStore } from "../adapters/typesense.js";
+import "../adapters/index.js";
 import { FileStructureCache } from "./cache.js";
+import { type SearchOptions, type SessionProvider } from "./provider.js";
 import type { CandidateSession, SessionDocument } from "./types.js";
 export declare class PiRagService {
     private store;
     private cache;
-    constructor(store?: TypesenseSessionStore, cache?: FileStructureCache);
-    searchSessions(query: string, limit?: number, options?: {
-        rerank?: boolean;
-        projectHints?: string[];
-        filterBy?: string;
-        sortBy?: string;
-        preset?: string;
-    }): Promise<CandidateSession[]>;
+    constructor(store?: SessionProvider, cache?: FileStructureCache);
+    searchSessions(query: string, limit?: number, options?: SearchOptions): Promise<CandidateSession[]>;
     getSession(id: string): Promise<SessionDocument>;
     getStructure(id: string, refresh?: boolean): Promise<import("./types.js").SessionStructure>;
     getContent(id: string, input: {

@@ -1,3 +1,4 @@
+import { rerankCandidates } from "../core/rerank.js";
 export function configFromEnv(env = process.env) {
     const host = env.TYPESENSE_HOST || env.PI_RAG_TYPESENSE_HOST;
     const apiKey = env.TYPESENSE_API_KEY || env.PI_RAG_TYPESENSE_API_KEY;
@@ -8,17 +9,20 @@ export function configFromEnv(env = process.env) {
 export class TypesenseSessionStore {
     cfg;
     fetcher;
+    name = "typesense";
     constructor(cfg = configFromEnv(), fetcher = fetch) {
         this.cfg = cfg;
         this.fetcher = fetcher;
     }
-    async search(query, limit = 8, options = {}) {
+    async search(query, limitOrOptions = 8, options = {}) {
+        const limit = typeof limitOrOptions === "number" ? limitOrOptions : (limitOrOptions.limit ?? 8);
+        const merged = typeof limitOrOptions === "number" ? options : { ...options, ...limitOrOptions };
         const params = new URLSearchParams({ q: query || "*", query_by: this.cfg.queryBy, per_page: String(limit) });
-        const filterBy = options.filterBy || this.cfg.filterBy;
-        const sortBy = options.sortBy || this.cfg.sortBy;
-        const preset = options.preset || this.cfg.preset;
-        const prefix = options.prefix || this.cfg.prefix;
-        const exhaustive = options.exhaustiveSearch ?? this.cfg.exhaustiveSearch;
+        const filterBy = merged.filterBy || this.cfg.filterBy;
+        const sortBy = merged.sortBy || this.cfg.sortBy;
+        const preset = merged.preset || this.cfg.preset;
+        const prefix = merged.prefix || this.cfg.prefix;
+        const exhaustive = merged.exhaustiveSearch ?? this.cfg.exhaustiveSearch;
         if (filterBy)
             params.set("filter_by", filterBy);
         if (sortBy)
@@ -34,10 +38,11 @@ export class TypesenseSessionStore {
         if (!res.ok)
             throw new Error(`Typesense search failed ${res.status}: ${await res.text()}`);
         const json = await res.json();
-        return (json.hits || []).map((hit) => {
+        const candidates = (json.hits || []).map((hit) => {
             const d = hit.document || {};
             return { id: String(d[this.cfg.idField || "id"] ?? d.id), title: d[this.cfg.titleField || "title"], score: hit.text_match, highlights: (hit.highlights || []).map((h) => h.snippet || h.value).filter(Boolean), createdAt: d.createdAt || d.created_at, updatedAt: d.updatedAt || d.updated_at, trace: [`Typesense collection ${this.cfg.collection}`, `query_by=${this.cfg.queryBy}`, `text_match=${hit.text_match ?? "n/a"}`] };
         });
+        return merged.rerank === false ? candidates : rerankCandidates(candidates, { query, projectHints: merged.projectHints });
     }
     async get(id) {
         const url = `${this.cfg.host}/collections/${encodeURIComponent(this.cfg.collection)}/documents/${encodeURIComponent(id)}`;

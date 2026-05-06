@@ -1,3 +1,5 @@
+import type { SearchOptions, SessionProvider } from "../core/provider.js";
+import { rerankCandidates } from "../core/rerank.js";
 import type { CandidateSession, SessionDocument, SessionMessage } from "../core/types.js";
 
 export interface TypesenseConfig {
@@ -24,16 +26,19 @@ export function configFromEnv(env: Record<string, string | undefined> = process.
   return { host: host.replace(/\/$/, ""), apiKey, collection: env.PI_RAG_TYPESENSE_COLLECTION || env.TYPESENSE_COLLECTION || "agent_sessions", queryBy: env.PI_RAG_QUERY_BY || "title,content,summary", idField: env.PI_RAG_ID_FIELD || "id", titleField: env.PI_RAG_TITLE_FIELD || "title", messagesField: env.PI_RAG_MESSAGES_FIELD || "messages", preset: env.PI_RAG_TYPESENSE_PRESET, sortBy: env.PI_RAG_SORT_BY, filterBy: env.PI_RAG_FILTER_BY, prefix: env.PI_RAG_PREFIX, exhaustiveSearch: env.PI_RAG_EXHAUSTIVE_SEARCH === "true" };
 }
 
-export class TypesenseSessionStore {
+export class TypesenseSessionStore implements SessionProvider {
+  readonly name = "typesense";
   constructor(private cfg: TypesenseConfig = configFromEnv(), private fetcher: FetchLike = fetch) {}
 
-  async search(query: string, limit = 8, options: { filterBy?: string; sortBy?: string; preset?: string; prefix?: string; exhaustiveSearch?: boolean } = {}): Promise<CandidateSession[]> {
+  async search(query: string, limitOrOptions: number | SearchOptions = 8, options: { filterBy?: string; sortBy?: string; preset?: string; prefix?: string; exhaustiveSearch?: boolean; projectHints?: string[]; rerank?: boolean } = {}): Promise<CandidateSession[]> {
+    const limit = typeof limitOrOptions === "number" ? limitOrOptions : (limitOrOptions.limit ?? 8);
+    const merged = typeof limitOrOptions === "number" ? options : { ...options, ...limitOrOptions };
     const params = new URLSearchParams({ q: query || "*", query_by: this.cfg.queryBy, per_page: String(limit) });
-    const filterBy = options.filterBy || this.cfg.filterBy;
-    const sortBy = options.sortBy || this.cfg.sortBy;
-    const preset = options.preset || this.cfg.preset;
-    const prefix = options.prefix || this.cfg.prefix;
-    const exhaustive = options.exhaustiveSearch ?? this.cfg.exhaustiveSearch;
+    const filterBy = merged.filterBy || this.cfg.filterBy;
+    const sortBy = merged.sortBy || this.cfg.sortBy;
+    const preset = merged.preset || this.cfg.preset;
+    const prefix = merged.prefix || this.cfg.prefix;
+    const exhaustive = merged.exhaustiveSearch ?? this.cfg.exhaustiveSearch;
     if (filterBy) params.set("filter_by", filterBy);
     if (sortBy) params.set("sort_by", sortBy);
     if (preset) params.set("preset", preset);
@@ -43,10 +48,11 @@ export class TypesenseSessionStore {
     const res = await this.fetcher(url, { headers: { "X-TYPESENSE-API-KEY": this.cfg.apiKey } });
     if (!res.ok) throw new Error(`Typesense search failed ${res.status}: ${await res.text()}`);
     const json: any = await res.json();
-    return (json.hits || []).map((hit: any) => {
+    const candidates = (json.hits || []).map((hit: any) => {
       const d = hit.document || {};
       return { id: String(d[this.cfg.idField || "id"] ?? d.id), title: d[this.cfg.titleField || "title"], score: hit.text_match, highlights: (hit.highlights || []).map((h: any) => h.snippet || h.value).filter(Boolean), createdAt: d.createdAt || d.created_at, updatedAt: d.updatedAt || d.updated_at, trace: [`Typesense collection ${this.cfg.collection}`, `query_by=${this.cfg.queryBy}`, `text_match=${hit.text_match ?? "n/a"}`] } satisfies CandidateSession;
     });
+    return merged.rerank === false ? candidates : rerankCandidates(candidates, { query, projectHints: merged.projectHints });
   }
 
   async get(id: string): Promise<SessionDocument> {

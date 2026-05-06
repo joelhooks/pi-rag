@@ -1,12 +1,14 @@
 # pi-rag
 
-PageIndex-style retrieval for pi agent sessions and Typesense-backed memory.
+PageIndex-style retrieval for pi agent sessions, memory stores, and document corpora.
 
-This is a pi extension, not an OpenAI Agents SDK app. It borrows the useful PageIndex idea — reason over a hierarchical structure first, then fetch exact bounded content — and adapts it to agent session transcripts.
+This is a pi extension and library, not an OpenAI Agents SDK app. It borrows the useful PageIndex idea — reason over a hierarchical structure first, then fetch exact bounded content — and adapts it to agent session transcripts and other retrieval backends.
 
 ## Why
 
-Vector search is good for candidate discovery but poor as the only retrieval surface for long sessions. Agent sessions have structure: turns, tool calls, topic shifts, time gaps, and task phases. `pi-rag` uses Typesense for candidate search, then builds a deterministic tree over the session so the agent can inspect structure before pulling content.
+Vector/BM25 search is good for candidate discovery but poor as the only retrieval surface for long sessions. Agent sessions have structure: turns, tool calls, topic shifts, time gaps, and task phases. `pi-rag` uses a provider for candidate search, then builds a deterministic tree over the session so the agent can inspect structure before pulling content.
+
+Typesense is the default provider because joelclaw already has it and BM25/text-match should stay in full effect. It is not a hard requirement. Providers can be Typesense, libSQL, pdf-brain, local files, or any store that can search candidates and fetch a document/session by id.
 
 Flow:
 
@@ -49,6 +51,7 @@ Restart pi. The tools should appear in the tool list.
 Required:
 
 ```bash
+PI_RAG_PROVIDER=typesense
 TYPESENSE_HOST=http://localhost:8108
 TYPESENSE_API_KEY=...
 ```
@@ -68,11 +71,32 @@ PI_RAG_SORT_BY=optional-default-sort
 PI_RAG_EXHAUSTIVE_SEARCH=true
 ```
 
-The Typesense document should contain either:
+The default Typesense provider document should contain either:
 
 - `messages`: array of `{ id, role, content|text|message, createdAt }`; or
 - `messages`: string transcript separated by blank lines; or
 - `content`/`summary` fallback for single-message docs.
+
+## Provider interface
+
+A provider implements:
+
+```ts
+interface SessionProvider {
+  name: string
+  search(query: string, options?: SearchOptions): Promise<CandidateSession[]>
+  get(id: string): Promise<SessionDocument>
+}
+```
+
+Included providers/adapters:
+
+- `typesense` — default HTTP provider, BM25/text-match first-stage recall.
+- `InMemorySessionProvider` — tests, demos, local arrays.
+- `LibSqlSessionProvider` — generic libSQL/Turso-style client adapter.
+- `PdfBrainProvider` — maps PDF/document search records into PageIndex-style session documents.
+
+PDF brain fits naturally: search returns candidate docs/pages/sections, `get(id)` returns a synthetic `SessionDocument` whose messages are pages/sections. Then the same structure/tree-search/bounded-content pipeline applies.
 
 ## Tools
 
@@ -172,4 +196,4 @@ bun run build
 - Typesense schemas vary. Configure field names with env vars.
 - This does not replace vector search; it gives agents a better second-stage retrieval surface after candidate discovery.
 - Content retrieval is bounded by design. If an agent wants the whole session, it should justify that explicitly with `allowLarge=true`.
-- It does not parse PDFs/OCR like upstream PageIndex. This repo targets agent sessions and memory documents.
+- It does not parse PDFs/OCR like upstream PageIndex. PDF/document systems should plug in as providers — `PdfBrainProvider` is the bridge shape.
