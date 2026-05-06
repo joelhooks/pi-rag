@@ -10,7 +10,7 @@ Vector search is good for candidate discovery but poor as the only retrieval sur
 
 Flow:
 
-1. `rag_search_sessions` finds candidate sessions/docs in Typesense.
+1. `rag_search_sessions` finds candidate sessions/docs in Typesense, then reranks by default with local BM25 + exact/project/recency signals.
 2. `rag_get_session` returns metadata and counts only.
 3. `rag_get_structure` builds a PageIndex-like outline from message ranges.
 4. `rag_tree_search` reasons over the tree and selects likely relevant nodes.
@@ -62,6 +62,10 @@ PI_RAG_ID_FIELD=id
 PI_RAG_TITLE_FIELD=title
 PI_RAG_MESSAGES_FIELD=messages
 PI_RAG_CACHE_DIR=.pi-rag/cache
+PI_RAG_TYPESENSE_PRESET=optional-typesense-preset
+PI_RAG_FILTER_BY=optional-default-filter
+PI_RAG_SORT_BY=optional-default-sort
+PI_RAG_EXHAUSTIVE_SEARCH=true
 ```
 
 The Typesense document should contain either:
@@ -74,11 +78,21 @@ The Typesense document should contain either:
 
 ### `rag_search_sessions`
 
-Search candidate sessions. Returns ids, titles, highlights, score, and trace metadata.
+Search candidate sessions. Returns ids, titles, highlights, Typesense score, local rerank score, and trace metadata. Reranking is on by default.
 
 ```json
-{ "query": "PageIndex Typesense memory", "limit": 5 }
+{ "query": "PageIndex Typesense memory", "limit": 5, "rerank": true, "projectHints": ["joelclaw", "gateway"] }
 ```
+
+Rerank blend:
+
+- Typesense BM25/text-match for broad candidate recall
+- local BM25 over titles/highlights/ids for explainable reordering
+- exact phrase/term hits
+- project hints from Slack thread/repo/person context
+- recency decay
+
+You can pass `filterBy`, `sortBy`, or `preset` through to Typesense for collection-specific tuning.
 
 ### `rag_get_session`
 
@@ -134,10 +148,11 @@ Set `usePi=true` only when semantic summarization is worth the latency. It shell
 pi extension
   ├─ registers RAG tools
   ├─ PiRagService
-  │   ├─ TypesenseSessionStore — candidate search + doc fetch via HTTP
+  │   ├─ TypesenseSessionStore — candidate search + doc fetch via HTTP; BM25/text-match stays in full effect
   │   ├─ FileStructureCache — JSON cache under .pi-rag/cache
   │   ├─ structure builder — deterministic PageIndex-style tree
   │   ├─ tree search — inspect/score/select nodes before fetching content
+  │   ├─ reranker — local BM25 + Typesense score + exact/project/recency blend
   │   ├─ corpus tree — group candidate sessions by project/source
   │   └─ summarizers — heuristic first, optional pi CLI semantic summaries
   └─ bounded content retrieval — exact transcript slices with trace

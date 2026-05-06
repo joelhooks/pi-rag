@@ -5,7 +5,13 @@ export declare class PiRagService {
     private store;
     private cache;
     constructor(store?: TypesenseSessionStore, cache?: FileStructureCache);
-    searchSessions(query: string, limit?: number): Promise<CandidateSession[]>;
+    searchSessions(query: string, limit?: number, options?: {
+        rerank?: boolean;
+        projectHints?: string[];
+        filterBy?: string;
+        sortBy?: string;
+        preset?: string;
+    }): Promise<CandidateSession[]>;
     getSession(id: string): Promise<SessionDocument>;
     getStructure(id: string, refresh?: boolean): Promise<import("./types.js").SessionStructure>;
     getContent(id: string, input: {

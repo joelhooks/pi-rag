@@ -5,4 +5,5 @@ export * from "./core/cache.js";
 export * from "./core/service.js";
 export * from "./core/pageindex.js";
 export * from "./core/pi-inference.js";
+export * from "./core/rerank.js";
 export * from "./adapters/typesense.js";

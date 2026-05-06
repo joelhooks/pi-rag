@@ -2,6 +2,7 @@ import { TypesenseSessionStore } from "../adapters/typesense.js";
 import { FileStructureCache } from "./cache.js";
 import { buildCorpusTree, treeSearch } from "./pageindex.js";
 import { HeuristicSummarizer, PiCliSummarizer } from "./pi-inference.js";
+import { rerankCandidates } from "./rerank.js";
 import { buildStructure, findNode, getBoundedContent } from "./structure.js";
 export class PiRagService {
     store;
@@ -10,7 +11,14 @@ export class PiRagService {
         this.store = store;
         this.cache = cache;
     }
-    searchSessions(query, limit) { return this.store.search(query, limit); }
+    async searchSessions(query, limit, options = {}) {
+        // Pull extra candidates when reranking. Typesense/BM25 gets broad recall; local rerank corrects for our session/project needs.
+        const rawLimit = options.rerank ? Math.max(limit ?? 8, Math.min(50, (limit ?? 8) * 4)) : limit;
+        const candidates = await this.store.search(query, rawLimit, { filterBy: options.filterBy, sortBy: options.sortBy, preset: options.preset });
+        if (!options.rerank)
+            return candidates;
+        return rerankCandidates(candidates, { query, projectHints: options.projectHints }).slice(0, limit ?? 8);
+    }
     getSession(id) { return this.store.get(id); }
     async getStructure(id, refresh = false) {
         if (!refresh) {

@@ -3,7 +3,7 @@ export function configFromEnv(env = process.env) {
     const apiKey = env.TYPESENSE_API_KEY || env.PI_RAG_TYPESENSE_API_KEY;
     if (!host || !apiKey)
         throw new Error("Typesense config missing. Set TYPESENSE_HOST and TYPESENSE_API_KEY.");
-    return { host: host.replace(/\/$/, ""), apiKey, collection: env.PI_RAG_TYPESENSE_COLLECTION || env.TYPESENSE_COLLECTION || "agent_sessions", queryBy: env.PI_RAG_QUERY_BY || "title,content,summary", idField: env.PI_RAG_ID_FIELD || "id", titleField: env.PI_RAG_TITLE_FIELD || "title", messagesField: env.PI_RAG_MESSAGES_FIELD || "messages" };
+    return { host: host.replace(/\/$/, ""), apiKey, collection: env.PI_RAG_TYPESENSE_COLLECTION || env.TYPESENSE_COLLECTION || "agent_sessions", queryBy: env.PI_RAG_QUERY_BY || "title,content,summary", idField: env.PI_RAG_ID_FIELD || "id", titleField: env.PI_RAG_TITLE_FIELD || "title", messagesField: env.PI_RAG_MESSAGES_FIELD || "messages", preset: env.PI_RAG_TYPESENSE_PRESET, sortBy: env.PI_RAG_SORT_BY, filterBy: env.PI_RAG_FILTER_BY, prefix: env.PI_RAG_PREFIX, exhaustiveSearch: env.PI_RAG_EXHAUSTIVE_SEARCH === "true" };
 }
 export class TypesenseSessionStore {
     cfg;
@@ -12,8 +12,23 @@ export class TypesenseSessionStore {
         this.cfg = cfg;
         this.fetcher = fetcher;
     }
-    async search(query, limit = 8) {
+    async search(query, limit = 8, options = {}) {
         const params = new URLSearchParams({ q: query || "*", query_by: this.cfg.queryBy, per_page: String(limit) });
+        const filterBy = options.filterBy || this.cfg.filterBy;
+        const sortBy = options.sortBy || this.cfg.sortBy;
+        const preset = options.preset || this.cfg.preset;
+        const prefix = options.prefix || this.cfg.prefix;
+        const exhaustive = options.exhaustiveSearch ?? this.cfg.exhaustiveSearch;
+        if (filterBy)
+            params.set("filter_by", filterBy);
+        if (sortBy)
+            params.set("sort_by", sortBy);
+        if (preset)
+            params.set("preset", preset);
+        if (prefix)
+            params.set("prefix", prefix);
+        if (exhaustive != null)
+            params.set("exhaustive_search", exhaustive ? "true" : "false");
         const url = `${this.cfg.host}/collections/${encodeURIComponent(this.cfg.collection)}/documents/search?${params}`;
         const res = await this.fetcher(url, { headers: { "X-TYPESENSE-API-KEY": this.cfg.apiKey } });
         if (!res.ok)

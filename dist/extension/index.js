@@ -7,9 +7,9 @@ export default function piRagExtension(pi) {
         name: "rag_search_sessions",
         label: "RAG Search Sessions",
         description: "Search Typesense-backed agent session memory for candidate sessions/documents. Returns candidates with trace metadata, not full content.",
-        parameters: Type.Object({ query: Type.String(), limit: Type.Optional(Type.Number({ minimum: 1, maximum: 25 })), corpusTree: Type.Optional(Type.Boolean()) }),
+        parameters: Type.Object({ query: Type.String(), limit: Type.Optional(Type.Number({ minimum: 1, maximum: 25 })), corpusTree: Type.Optional(Type.Boolean()), rerank: Type.Optional(Type.Boolean()), projectHints: Type.Optional(Type.Array(Type.String())), filterBy: Type.Optional(Type.String()), sortBy: Type.Optional(Type.String()), preset: Type.Optional(Type.String()) }),
         async execute(_id, params) {
-            const candidates = await service.searchSessions(params.query, params.limit);
+            const candidates = await service.searchSessions(params.query, params.limit, { rerank: params.rerank ?? true, projectHints: params.projectHints, filterBy: params.filterBy, sortBy: params.sortBy, preset: params.preset });
             return text(params.corpusTree ? { candidates, corpusTree: service.corpusTree(candidates) } : candidates);
         },
     });
