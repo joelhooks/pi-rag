@@ -1,6 +1,8 @@
 import { TypesenseSessionStore } from "../adapters/typesense.js";
 import { FileStructureCache } from "./cache.js";
-import { buildStructure, getBoundedContent } from "./structure.js";
+import { buildCorpusTree, treeSearch } from "./pageindex.js";
+import { HeuristicSummarizer, PiCliSummarizer } from "./pi-inference.js";
+import { buildStructure, findNode, getBoundedContent } from "./structure.js";
 export class PiRagService {
     store;
     cache;
@@ -25,5 +27,23 @@ export class PiRagService {
         const doc = await this.store.get(id);
         const structure = await this.getStructure(id);
         return getBoundedContent(doc, structure, input);
+    }
+    async searchTree(id, query, opts = {}) {
+        const doc = await this.store.get(id);
+        const structure = await this.getStructure(id);
+        return treeSearch(structure, doc, query, opts);
+    }
+    async summarizeNode(id, nodeId, opts = {}) {
+        const doc = await this.store.get(id);
+        const structure = await this.getStructure(id);
+        const node = findNode(structure, nodeId);
+        if (!node)
+            throw new Error(`node not found: ${nodeId}`);
+        const messages = doc.messages.slice(node.start, node.end + 1);
+        const summarizer = opts.usePi ? new PiCliSummarizer() : new HeuristicSummarizer();
+        return summarizer.summarizeNode(messages, node, doc);
+    }
+    corpusTree(candidates) {
+        return buildCorpusTree(candidates.map((c) => ({ id: c.id, title: c.title, createdAt: c.createdAt, metadata: { score: c.score, highlights: c.highlights } })));
     }
 }
