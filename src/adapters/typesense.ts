@@ -1,5 +1,4 @@
 import type { SearchOptions, SessionProvider } from "../core/provider.js";
-import { rerankCandidates } from "../core/rerank.js";
 import type { CandidateSession, SessionDocument, SessionMessage } from "../core/types.js";
 
 export interface TypesenseConfig {
@@ -52,7 +51,9 @@ export class TypesenseSessionStore implements SessionProvider {
       const d = hit.document || {};
       return { id: String(d[this.cfg.idField || "id"] ?? d.id), title: d[this.cfg.titleField || "title"], score: hit.text_match, highlights: (hit.highlights || []).map((h: any) => h.snippet || h.value).filter(Boolean), createdAt: d.createdAt || d.created_at, updatedAt: d.updatedAt || d.updated_at, trace: [`Typesense collection ${this.cfg.collection}`, `query_by=${this.cfg.queryBy}`, `text_match=${hit.text_match ?? "n/a"}`] } satisfies CandidateSession;
     });
-    return merged.rerank === false ? candidates : rerankCandidates(candidates, { query, projectHints: merged.projectHints });
+    // Typesense already applies its BM25/text_match ranking here. Keep this adapter
+    // as first-stage recall; PiRagService applies the joelclaw-specific rerank once.
+    return candidates;
   }
 
   async get(id: string): Promise<SessionDocument> {

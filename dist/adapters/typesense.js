@@ -1,4 +1,3 @@
-import { rerankCandidates } from "../core/rerank.js";
 export function configFromEnv(env = process.env) {
     const host = env.TYPESENSE_HOST || env.PI_RAG_TYPESENSE_HOST;
     const apiKey = env.TYPESENSE_API_KEY || env.PI_RAG_TYPESENSE_API_KEY;
@@ -42,7 +41,9 @@ export class TypesenseSessionStore {
             const d = hit.document || {};
             return { id: String(d[this.cfg.idField || "id"] ?? d.id), title: d[this.cfg.titleField || "title"], score: hit.text_match, highlights: (hit.highlights || []).map((h) => h.snippet || h.value).filter(Boolean), createdAt: d.createdAt || d.created_at, updatedAt: d.updatedAt || d.updated_at, trace: [`Typesense collection ${this.cfg.collection}`, `query_by=${this.cfg.queryBy}`, `text_match=${hit.text_match ?? "n/a"}`] };
         });
-        return merged.rerank === false ? candidates : rerankCandidates(candidates, { query, projectHints: merged.projectHints });
+        // Typesense already applies its BM25/text_match ranking here. Keep this adapter
+        // as first-stage recall; PiRagService applies the joelclaw-specific rerank once.
+        return candidates;
     }
     async get(id) {
         const url = `${this.cfg.host}/collections/${encodeURIComponent(this.cfg.collection)}/documents/${encodeURIComponent(id)}`;
