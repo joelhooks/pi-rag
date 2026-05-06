@@ -57,12 +57,12 @@ export function normalizeDocument(raw, cfg = {}) {
     const idField = cfg.idField || "id";
     const titleField = cfg.titleField || "title";
     const messagesField = cfg.messagesField || "messages";
-    const rawMessages = raw[messagesField] || raw.messages || raw.entries || [];
+    const rawMessages = raw[messagesField] ?? raw.messages ?? raw.entries;
     let messages;
-    if (Array.isArray(rawMessages)) {
+    if (Array.isArray(rawMessages) && rawMessages.length > 0) {
         messages = rawMessages.map((m, i) => ({ id: String(m.id ?? i), role: String(m.role ?? m.type ?? "custom"), content: String(m.content ?? m.text ?? m.message ?? ""), createdAt: m.createdAt ?? m.created_at ?? m.timestamp, metadata: m.metadata }));
     }
-    else if (typeof rawMessages === "string") {
+    else if (typeof rawMessages === "string" && rawMessages.trim()) {
         messages = rawMessages.split(/\n{2,}/).filter(Boolean).map((content, i) => ({ id: String(i), role: "custom", content }));
     }
     else {

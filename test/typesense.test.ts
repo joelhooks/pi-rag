@@ -7,6 +7,12 @@ describe("typesense adapter", () => {
     expect(doc.messages[0]!.content).toBe("hello");
   });
 
+  test("adapts document content into a synthetic message when messages are absent", () => {
+    const doc = normalizeDocument({ id: "adr:1", title: "ADR", content: "decision body", messages: [] });
+    expect(doc.messages).toHaveLength(1);
+    expect(doc.messages[0]!.content).toBe("decision body");
+  });
+
   test("search uses injected fetch", async () => {
     const calls: string[] = [];
     const fetcher = async (input: string | URL | Request) => { calls.push(String(input)); return new Response(JSON.stringify({ hits: [{ text_match: 42, document: { id: "s1", title: "Session" }, highlights: [{ snippet: "hit" }] }] }), { status: 200 }); };
