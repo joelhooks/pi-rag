@@ -43,12 +43,13 @@ bun run build
 ln -sfn "$PWD/dist/index.js" ~/.pi/agent/extensions/pi-rag.js
 ```
 
-For gateway project-local loading:
+The global extension is enough for normal pi and gateway sessions. Only install a gateway project-local wrapper if you intentionally disable global extensions:
 
 ```bash
-mkdir -p ~/.joelclaw/gateway/.pi/extensions
-ln -sfn "$PWD/dist/index.js" ~/.joelclaw/gateway/.pi/extensions/pi-rag.js
+PI_RAG_INSTALL_GATEWAY_LOCAL=true ./install.sh
 ```
+
+Do not install both global and project-local copies in the same pi session; pi rejects duplicate tool names.
 
 Restart pi/gateway. The tools should appear in the tool list.
 
