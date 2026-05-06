@@ -13,9 +13,11 @@ Flow:
 1. `rag_search_sessions` finds candidate sessions/docs in Typesense.
 2. `rag_get_session` returns metadata and counts only.
 3. `rag_get_structure` builds a PageIndex-like outline from message ranges.
-4. `rag_get_content` fetches exact bounded transcript slices by node id or range.
+4. `rag_tree_search` reasons over the tree and selects likely relevant nodes.
+5. `rag_get_content` fetches exact bounded transcript slices by node id or range.
+6. `rag_summarize_node` summarizes a bounded node with deterministic heuristics or, when explicitly requested, through the pi CLI.
 
-No full-session dumps by default. No direct paid LLM calls. Optional summarization can be added behind an interface later.
+No full-session dumps by default. No OpenAI Agents SDK. No direct paid LLM calls.
 
 ## Attribution
 
@@ -94,6 +96,14 @@ Builds/caches a deterministic hierarchy. Segmentation uses message windows, role
 { "sessionId": "abc123", "refresh": false }
 ```
 
+### `rag_tree_search`
+
+Inspect the hierarchy and score/select relevant nodes before fetching content.
+
+```json
+{ "sessionId": "abc123", "query": "why did the Better Auth ADR happen", "fanout": 3, "maxDepth": 4 }
+```
+
 ### `rag_get_content`
 
 Exact bounded content by node or range. Large/full dumps are refused unless `allowLarge=true`.
@@ -108,6 +118,16 @@ or:
 { "sessionId": "abc123", "start": 12, "end": 18 }
 ```
 
+### `rag_summarize_node`
+
+Summarize one bounded node.
+
+```json
+{ "sessionId": "abc123", "nodeId": "n2.1" }
+```
+
+Set `usePi=true` only when semantic summarization is worth the latency. It shells through `pi -p --no-session --no-extensions`, not direct provider SDKs.
+
 ## Architecture
 
 ```text
@@ -116,7 +136,10 @@ pi extension
   ├─ PiRagService
   │   ├─ TypesenseSessionStore — candidate search + doc fetch via HTTP
   │   ├─ FileStructureCache — JSON cache under .pi-rag/cache
-  │   └─ structure builder — deterministic PageIndex-style tree
+  │   ├─ structure builder — deterministic PageIndex-style tree
+  │   ├─ tree search — inspect/score/select nodes before fetching content
+  │   ├─ corpus tree — group candidate sessions by project/source
+  │   └─ summarizers — heuristic first, optional pi CLI semantic summaries
   └─ bounded content retrieval — exact transcript slices with trace
 ```
 
@@ -130,7 +153,8 @@ bun run build
 
 ## Limitations
 
-- The hierarchy is heuristic, not semantic LLM summarization. That is intentional for v0: deterministic, cheap, private.
+- The default hierarchy is heuristic. Semantic node summaries are available through pi CLI, but not automatic.
 - Typesense schemas vary. Configure field names with env vars.
 - This does not replace vector search; it gives agents a better second-stage retrieval surface after candidate discovery.
 - Content retrieval is bounded by design. If an agent wants the whole session, it should justify that explicitly with `allowLarge=true`.
+- It does not parse PDFs/OCR like upstream PageIndex. This repo targets agent sessions and memory documents.
