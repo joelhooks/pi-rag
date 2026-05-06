@@ -1,0 +1,45 @@
+import { Type } from "@sinclair/typebox";
+import { PiRagService } from "../core/service.js";
+
+function text(details: unknown) { return { content: [{ type: "text" as const, text: JSON.stringify(details, null, 2) }], details }; }
+
+type Pi = { registerTool: (tool: any) => void };
+
+export default function piRagExtension(pi: Pi) {
+  const service = new PiRagService();
+
+  pi.registerTool({
+    name: "rag_search_sessions",
+    label: "RAG Search Sessions",
+    description: "Search Typesense-backed agent session memory for candidate sessions/documents. Returns candidates with trace metadata, not full content.",
+    parameters: Type.Object({ query: Type.String(), limit: Type.Optional(Type.Number({ minimum: 1, maximum: 25 })) }),
+    async execute(_id: string, params: { query: string; limit?: number }) { return text(await service.searchSessions(params.query, params.limit)); },
+  });
+
+  pi.registerTool({
+    name: "rag_get_session",
+    label: "RAG Get Session",
+    description: "Get metadata for a session/document and message count. Does not dump full transcript.",
+    parameters: Type.Object({ sessionId: Type.String() }),
+    async execute(_id: string, params: { sessionId: string }) {
+      const doc = await service.getSession(params.sessionId);
+      return text({ id: doc.id, title: doc.title, source: doc.source, createdAt: doc.createdAt, updatedAt: doc.updatedAt, messageCount: doc.messages.length, metadataKeys: Object.keys(doc.metadata || {}).slice(0, 30), trace: ["metadata only; use rag_get_structure then rag_get_content for bounded retrieval"] });
+    },
+  });
+
+  pi.registerTool({
+    name: "rag_get_structure",
+    label: "RAG Get Structure",
+    description: "Build or fetch a PageIndex-style hierarchical outline for a session/document. Use this before fetching content.",
+    parameters: Type.Object({ sessionId: Type.String(), refresh: Type.Optional(Type.Boolean()) }),
+    async execute(_id: string, params: { sessionId: string; refresh?: boolean }) { return text(await service.getStructure(params.sessionId, params.refresh)); },
+  });
+
+  pi.registerTool({
+    name: "rag_get_content",
+    label: "RAG Get Content",
+    description: "Retrieve exact bounded transcript content by node id or message start/end range. Refuses large full-session dumps by default.",
+    parameters: Type.Object({ sessionId: Type.String(), nodeId: Type.Optional(Type.String()), start: Type.Optional(Type.Number({ minimum: 0 })), end: Type.Optional(Type.Number({ minimum: 0 })), allowLarge: Type.Optional(Type.Boolean()) }),
+    async execute(_id: string, params: { sessionId: string; nodeId?: string; start?: number; end?: number; allowLarge?: boolean }) { return text(await service.getContent(params.sessionId, params)); },
+  });
+}
