@@ -27,24 +27,32 @@ Conceptually inspired by [VectifyAI/PageIndex](https://github.com/VectifyAI/Page
 
 ## Install as a pi extension
 
-Clone and build:
+Fast path:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/joelhooks/pi-rag/main/install.sh | bash
+```
+
+Manual:
 
 ```bash
 git clone https://github.com/joelhooks/pi-rag.git
 cd pi-rag
 bun install
 bun run build
+ln -sfn "$PWD/dist/index.js" ~/.pi/agent/extensions/pi-rag.js
 ```
 
-Symlink or copy the extension into pi's extension directory:
+For gateway project-local loading:
 
 ```bash
-ln -s "$PWD/src/index.ts" ~/.pi/agent/extensions/pi-rag.ts
-# or use dist after build if your pi setup loads compiled JS
-ln -s "$PWD/dist/index.js" ~/.pi/agent/extensions/pi-rag.js
+mkdir -p ~/.joelclaw/gateway/.pi/extensions
+ln -sfn "$PWD/dist/index.js" ~/.joelclaw/gateway/.pi/extensions/pi-rag.js
 ```
 
-Restart pi. The tools should appear in the tool list.
+Restart pi/gateway. The tools should appear in the tool list.
+
+For satellite joelclaw machines, see [SATELLITES.md](./SATELLITES.md).
 
 ## Environment
 
